@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -119,7 +120,6 @@ func (a *auditing) K8sAuditingEnabled() bool {
 //		info.Verb = "post"
 //		info.Name = created.Name
 //	}
-//
 func (a *auditing) LogRequestObject(req *http.Request, info *request.RequestInfo) *auditv1alpha1.Event {
 
 	// Ignore the dryRun k8s request.
@@ -253,10 +253,19 @@ func (a *auditing) needAnalyzeRequestBody(e *auditv1alpha1.Event, req *http.Requ
 
 func (a *auditing) LogResponseObject(e *auditv1alpha1.Event, resp *ResponseCapture) {
 
+	fmt.Println("===================审计事件========================")
 	e.StageTimestamp = metav1.NowMicro()
 	e.ResponseStatus = &metav1.Status{Code: int32(resp.StatusCode())}
 	if e.Level.GreaterOrEqual(audit.LevelRequestResponse) {
 		e.ResponseObject = &runtime.Unknown{Raw: resp.Bytes()}
+	}
+
+	content := string(resp.body.Bytes())
+	fmt.Println("======>content", content)
+	// 判断响应是否是401，并且响应体中包含token is expired by
+	if resp.StatusCode() == http.StatusUnauthorized && strings.Contains(content, "token is expired by") {
+		fmt.Println("===========>token 超时")
+		e.Message = "token is expired"
 	}
 
 	a.cacheEvent(*e)
