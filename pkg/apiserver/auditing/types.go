@@ -253,7 +253,6 @@ func (a *auditing) needAnalyzeRequestBody(e *auditv1alpha1.Event, req *http.Requ
 
 func (a *auditing) LogResponseObject(e *auditv1alpha1.Event, resp *ResponseCapture) {
 
-	fmt.Println("===================审计事件========================")
 	e.StageTimestamp = metav1.NowMicro()
 	e.ResponseStatus = &metav1.Status{Code: int32(resp.StatusCode())}
 	if e.Level.GreaterOrEqual(audit.LevelRequestResponse) {
@@ -261,11 +260,26 @@ func (a *auditing) LogResponseObject(e *auditv1alpha1.Event, resp *ResponseCaptu
 	}
 
 	content := string(resp.body.Bytes())
-	fmt.Println("======>content", content)
-	// 判断响应是否是401，并且响应体中包含token is expired by
+	fmt.Println("===============执行LogResponseObject")
+	fmt.Println(e.RequestURI, resp.StatusCode())
+	if resp.StatusCode() == http.StatusUnauthorized || resp.StatusCode() == http.StatusForbidden {
+		fmt.Println(content)
+	}
 	if resp.StatusCode() == http.StatusUnauthorized && strings.Contains(content, "token is expired by") {
-		fmt.Println("===========>token 超时")
-		e.Message = "token is expired"
+		var event auditv1alpha1.Event
+		event.StageTimestamp = metav1.NowMicro()
+		event.ResponseStatus = &metav1.Status{Code: http.StatusUnauthorized}
+		if event.Level.GreaterOrEqual(audit.LevelRequestResponse) {
+			event.ResponseObject = &runtime.Unknown{Raw: resp.Bytes()}
+		}
+		event.Verb = "token expired"
+		event.Level = a.getAuditLevel()
+		event.AuditID = types.UID(uuid.New().String())
+		event.Stage = audit.StageResponseComplete
+		event.UserAgent = e.UserAgent
+		event.RequestReceivedTimestamp = metav1.NowMicro()
+		event.ObjectRef = &audit.ObjectReference{}
+		a.cacheEvent(event)
 	}
 
 	a.cacheEvent(*e)
