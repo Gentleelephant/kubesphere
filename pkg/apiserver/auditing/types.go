@@ -260,11 +260,7 @@ func (a *auditing) LogResponseObject(e *auditv1alpha1.Event, resp *ResponseCaptu
 	}
 
 	content := string(resp.body.Bytes())
-	fmt.Println("===============执行LogResponseObject")
 	fmt.Println(e.RequestURI, resp.StatusCode())
-	if resp.StatusCode() == http.StatusUnauthorized || resp.StatusCode() == http.StatusForbidden {
-		fmt.Println(content)
-	}
 	if resp.StatusCode() == http.StatusUnauthorized && strings.Contains(content, "token is expired by") {
 		var event auditv1alpha1.Event
 		event.StageTimestamp = metav1.NowMicro()
